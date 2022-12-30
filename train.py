@@ -38,15 +38,15 @@ wandb_project = 'uk2e10'
 wandb_run_name = 'gpt2' # 'run' + str(time.time())
 # data
 dataset = 'uk2e10'
-batch_size = 16
+batch_size = 4
 block_size = 1024
 # model
 device = 'cuda:0'
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 dropout = 0.1
-n_layer = 12
-n_head = 12
-n_embd = 768
+n_layer = 36
+n_head = 20
+n_embd = 1280
 # adamw optimizer
 learning_rate = 2.5e-4 # max learning rate
 max_iters = 500000 # total number of training iterations
