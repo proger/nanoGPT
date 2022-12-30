@@ -26,19 +26,19 @@ from model import GPTConfig, GPT
 # -----------------------------------------------------------------------------
 # default config values
 # I/O
-out_dir = 'out'
+out_dir = 'exp'
 eval_interval = 500
 log_interval = 1
 eval_iters = 50
 eval_only = False # if True, script exits right after the first eval
 # wandb logging
-wandb_log = False # disabled by default
-wandb_entity = 'karpathy'
-wandb_project = 'owt'
+wandb_log = True # disabled by default
+wandb_entity = 'stud76'
+wandb_project = 'uk2e10'
 wandb_run_name = 'gpt2' # 'run' + str(time.time())
 # data
-dataset = 'openwebtext'
-batch_size = 8
+dataset = 'uk2e10'
+batch_size = 16
 block_size = 1024
 # model
 device = 'cuda:0'
@@ -106,6 +106,7 @@ if gpu_id == 0:
 torch.manual_seed(1337 + gpu_id) # note: each worker gets a different seed
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
+torch.set_float32_matmul_precision('high')
 
 # poor man's data loader, TODO evaluate need for actual DataLoader
 data_dir = os.path.join('data', dataset)
