@@ -40,6 +40,7 @@ wandb_run_name = 'gpt2' # 'run' + str(time.time())
 dataset = 'uk2e10'
 batch_size = 4
 block_size = 1024
+grad_acc_steps = 16
 # model
 device = 'cuda:0'
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
@@ -161,7 +162,7 @@ if init_from == 'resume':
 # compile the model
 if compile_model:
     print("compiling the model... (takes a ~minute)")
-    unoptimized_model = model
+    #unoptimized_model = model
     model = torch.compile(model) # requires PyTorch 2.0
 
 # wrap model into DDP container
@@ -208,6 +209,7 @@ if wandb_log and gpu_id == 0:
 
 # training loop
 t0 = time.time()
+optimizer.zero_grad(set_to_none=True)
 while True:
 
     # determine the learning rate for this iteration
@@ -247,10 +249,11 @@ while True:
     with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):
         logits, loss = model(X, Y)
 
-    optimizer.zero_grad(set_to_none=True)
     loss.backward()
     # TODO: gradient clipping evaluate need for
-    optimizer.step()
+    if iter_num and iter_num % grad_acc_steps == 0:
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
 
     t1 = time.time()
     dt = t1 - t0
