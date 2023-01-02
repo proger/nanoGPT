@@ -27,7 +27,7 @@ from utils import optimizer_to
 # -----------------------------------------------------------------------------
 # default config values
 # I/O
-out_dir = 'exp'
+out_dir = 'exp/gpt2-small'
 eval_interval = 500
 log_interval = 100
 eval_iters = 50
@@ -36,26 +36,26 @@ eval_only = False # if True, script exits right after the first eval
 wandb_log = True # disabled by default
 wandb_entity = 'stud76'
 wandb_project = 'uk2e10'
-wandb_run_name = 'gpt2' # 'run' + str(time.time())
+wandb_run_name = 'gpt2-small' # 'run' + str(time.time())
 # data
 dataset = 'uk2e10'
-batch_size = 2
+batch_size = 32
 block_size = 1024
 grad_acc_steps = 16
 # model
 device = 'cuda:0'
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 dropout = 0.1
-n_layer = 36
-n_head = 20
-n_embd = 1280
+n_layer = 12
+n_head = 12
+n_embd = 768
 # adamw optimizer
-learning_rate = 5e-4 # max learning rate
+learning_rate = 6e-4 # max learning rate
 max_iters = 1<<21 # total number of training iterations
 weight_decay = 1e-2
 betas = (0.9, 0.95)
 # learning rate decay settings
-decay_lr = True # whether to decay the learning rate
+decay_lr = False # whether to decay the learning rate
 warmup_iters = 2000 # how many steps to warm up for
 lr_decay_iters = 320000 # how many steps to decay the learning rate for
 min_lr = 1e-5 # minimum learning rate
@@ -216,6 +216,7 @@ if wandb_log and gpu_id == 0:
         "batch_size": batch_size,
         "block_size": block_size,
         "learning_rate": learning_rate, # TODO log everything else too
+        "grad_acc_steps": grad_acc_steps,
     }
 
 # training loop
@@ -240,7 +241,7 @@ while True:
                 "train/loss": losses['train'],
                 "val/loss": losses['val'],
                 "lr": lr,
-            }, step=iter_num // eval_interval)
+            }, step=iter_num)
         if losses['val'] < best_val_loss:
             best_val_loss = losses['val']
             raw_model = model.module if ddp else model
