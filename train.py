@@ -22,13 +22,14 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
 from model import GPTConfig, GPT
+from utils import optimizer_to
 
 # -----------------------------------------------------------------------------
 # default config values
 # I/O
 out_dir = 'exp'
 eval_interval = 500
-log_interval = 1
+log_interval = 100
 eval_iters = 50
 eval_only = False # if True, script exits right after the first eval
 # wandb logging
@@ -38,19 +39,19 @@ wandb_project = 'uk2e10'
 wandb_run_name = 'gpt2' # 'run' + str(time.time())
 # data
 dataset = 'uk2e10'
-batch_size = 4
+batch_size = 2
 block_size = 1024
 grad_acc_steps = 16
 # model
 device = 'cuda:0'
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 dropout = 0.1
 n_layer = 36
 n_head = 20
 n_embd = 1280
 # adamw optimizer
-learning_rate = 2.5e-4 # max learning rate
-max_iters = 500000 # total number of training iterations
+learning_rate = 5e-4 # max learning rate
+max_iters = 1<<21 # total number of training iterations
 weight_decay = 1e-2
 betas = (0.9, 0.95)
 # learning rate decay settings
@@ -136,13 +137,22 @@ elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
     # resume training from a checkpoint.
     ckpt_path = os.path.join(out_dir, 'ckpt.pt')
-    checkpoint = torch.load(ckpt_path, map_location=device)
+    checkpoint = torch.load(ckpt_path, map_location='cpu')
     checkpoint_model_args = checkpoint['model_args']
     for k, v in model_args.items():
         assert checkpoint_model_args[k] == v, "for now"
+
     gptconf = GPTConfig(**model_args)
-    model = GPT(gptconf)
-    model.load_state_dict(checkpoint['model'])
+
+    if compile_model:
+        # model compilation prefixes all keys with _orig_mod
+        model = torch.nn.ModuleDict({'_orig_mod': GPT(gptconf)})
+        model.load_state_dict(checkpoint['model'])
+        model = model['_orig_mod']
+    else:
+        model = GPT(gptconf)
+        model.load_state_dict(checkpoint['model'])
+
     iter_num = checkpoint['iter_num']
     best_val_loss = checkpoint['best_val_loss']
 elif init_from.startswith('gpt2'):
@@ -154,16 +164,17 @@ if block_size < model.block_size:
     model.crop_block_size(block_size)
 model.to(device)
 
-# optimizer
-optimizer = model.configure_optimizers(weight_decay, learning_rate, betas)
-if init_from == 'resume':
-    optimizer.load_state_dict(checkpoint['optimizer'])
-
 # compile the model
 if compile_model:
     print("compiling the model... (takes a ~minute)")
     #unoptimized_model = model
     model = torch.compile(model) # requires PyTorch 2.0
+
+# optimizer
+optimizer = model.configure_optimizers(weight_decay, learning_rate, betas)
+if init_from == 'resume':
+    optimizer.load_state_dict(checkpoint['optimizer'])
+    optimizer_to(optimizer, device)
 
 # wrap model into DDP container
 if ddp:
@@ -229,7 +240,7 @@ while True:
                 "train/loss": losses['train'],
                 "val/loss": losses['val'],
                 "lr": lr,
-            })
+            }, step=iter_num // eval_interval)
         if losses['val'] < best_val_loss:
             best_val_loss = losses['val']
             raw_model = model.module if ddp else model
