@@ -108,8 +108,8 @@ class GPT(nn.Module):
         self.block_size = config.block_size
 
         self.transformer = nn.ModuleDict(dict(
-            wte = bnb.nn.Embedding(config.vocab_size, config.n_embd),
-            wpe = bnb.nn.Embedding(config.block_size, config.n_embd),
+            wte = bnb.nn.StableEmbedding(config.vocab_size, config.n_embd),
+            wpe = bnb.nn.StableEmbedding(config.block_size, config.n_embd),
             drop = nn.Dropout(config.dropout),
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
             ln_f = nn.LayerNorm(config.n_embd),
