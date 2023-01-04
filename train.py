@@ -212,7 +212,7 @@ else:
 # optimizer
 optimizer = model.configure_optimizers(weight_decay, learning_rate, betas)
 if init_from == 'resume':
-    #optimizer.load_state_dict(checkpoint['optimizer']) # skip due to optimizer change
+    optimizer.load_state_dict(checkpoint['optimizer'])
     optimizer_to(optimizer, device)
 
 
