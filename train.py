@@ -45,11 +45,11 @@ dataset = 'uk2e10'
 batch_size = 2
 block_size = 2048
 grad_acc_steps = 128
-seed_base = 3407
+seed_base = 3409
 # model
 device = 'cuda:0'
 init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
-dropout = 0.1
+dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
 n_layer = 12
 n_head = 12
 n_embd = 768
@@ -62,7 +62,7 @@ betas = (0.9, 0.95)
 decay_lr = False # whether to decay the learning rate
 warmup_iters = 2000*grad_acc_steps # how many steps to warm up for
 lr_decay_iters = 320000 # how many steps to decay the learning rate for
-min_lr = 1e-5 # minimum learning rate
+min_lr = 6e-5 # minimum learning rate
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 compile_model = True # use PyTorch 2.0 to compile the model to be faster
