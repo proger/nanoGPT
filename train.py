@@ -26,7 +26,7 @@ from utils import optimizer_to
 
 #torch.set_default_dtype(torch.bfloat16)
 
-old_locals = locals()
+old_locals = set(locals())
 # -----------------------------------------------------------------------------
 # default config values
 # I/O
@@ -42,9 +42,10 @@ wandb_project = 'ubertext'
 wandb_run_name = 'gpt2-small' # 'run' + str(time.time())
 # data
 dataset = 'uk2e10'
-batch_size = 2
+batch_size = 4
 block_size = 2048
-grad_acc_steps = 128
+crop_block_size = 1024
+grad_acc_steps = 64
 seed_base = 3409
 # model
 device = 'cuda:0'
@@ -109,7 +110,7 @@ if ddp:
 else:
     gpu_id = 0 # gpu_id 0 means this is the (single) master process, basically
 
-run_config = {k: locals()[k] for k in locals() if k not in old_locals and k != 'configure'}
+run_config = {k: globals()[k] for k in locals() if k not in old_locals and k != 'configure' and k != 'old_locals'}
 
 if gpu_id == 0:
     os.makedirs(out_dir, exist_ok=True)
@@ -148,20 +149,20 @@ elif init_from == 'resume':
     checkpoint = torch.load(ckpt_path, map_location='cpu')
     checkpoint_model_args = checkpoint['model_args']
     for k, v in model_args.items():
-        if k == "block_size":
+        if k in ("block_size", "dropout"):
             continue
-        assert checkpoint_model_args[k] == v, "for now"
+        assert checkpoint_model_args[k] == v, f"{k} mismatching"
 
     gptconf = GPTConfig(**model_args)
 
     if compile_model:
         # model compilation prefixes all keys with _orig_mod
         model = torch.nn.ModuleDict({'_orig_mod': GPT(gptconf)})
-        model.load_state_dict(checkpoint['model'])
+        model.load_state_dict(checkpoint['model'], strict=False)
         model = model['_orig_mod']
     else:
         model = GPT(gptconf)
-        model.load_state_dict(checkpoint['model'])
+        model.load_state_dict(checkpoint['model'], strict=False)
 
     iter_num = checkpoint['iter_num']
     best_val_loss = checkpoint['best_val_loss']
@@ -172,11 +173,9 @@ elif init_from.startswith('gpt2'):
 
 
 # crop down the model block size if desired
-#block_size = 1024
-
 if block_size < model.block_size:
     print('cropping model block size from', model.block_size, 'to', block_size)
-    model.crop_block_size(block_size)
+    model.crop_block_size(crop_block_size)
 model.to(device)
 
 @torch.no_grad()
@@ -237,9 +236,10 @@ def get_lr(iter):
     return min_lr + coeff * (learning_rate - min_lr)
 
 run_config.update({
-    "tokens_per_step": batch_size*block_size*grad_acc_steps,
+    "crop_block_size": crop_block_size,
+    "tokens_per_step": batch_size*crop_block_size*grad_acc_steps,
 })
-print('run_config = ', run_config)
+print('run_config = ', run_config, flush=True)
 # logging
 if wandb_log and gpu_id == 0:
     wandb.init(project=wandb_project, entity=wandb_entity, name=wandb_run_name, config=run_config)
