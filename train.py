@@ -24,27 +24,29 @@ from torch.distributed import init_process_group, destroy_process_group
 from model import GPTConfig, GPT
 from utils import optimizer_to
 
+#torch.set_default_dtype(torch.bfloat16)
+
 # -----------------------------------------------------------------------------
 # default config values
 # I/O
 out_dir = 'exp/gpt2-small'
-eval_interval = 500
+eval_interval = 5000
 log_interval = 100
 eval_iters = 50
 eval_only = False # if True, script exits right after the first eval
 # wandb logging
 wandb_log = True # disabled by default
 wandb_entity = 'stud76'
-wandb_project = 'uk2e10'
+wandb_project = 'ubertext'
 wandb_run_name = 'gpt2-small' # 'run' + str(time.time())
 # data
 dataset = 'uk2e10'
-batch_size = 32
-block_size = 1024
-grad_acc_steps = 16
+batch_size = 2
+block_size = 2048
+grad_acc_steps = 128
 # model
 device = 'cuda:0'
-init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
 dropout = 0.1
 n_layer = 12
 n_head = 12
@@ -56,7 +58,7 @@ weight_decay = 1e-2
 betas = (0.9, 0.95)
 # learning rate decay settings
 decay_lr = False # whether to decay the learning rate
-warmup_iters = 2000 # how many steps to warm up for
+warmup_iters = 2000*grad_acc_steps # how many steps to warm up for
 lr_decay_iters = 320000 # how many steps to decay the learning rate for
 min_lr = 1e-5 # minimum learning rate
 # DDP settings
@@ -140,6 +142,8 @@ elif init_from == 'resume':
     checkpoint = torch.load(ckpt_path, map_location='cpu')
     checkpoint_model_args = checkpoint['model_args']
     for k, v in model_args.items():
+        if k == "block_size":
+            continue
         assert checkpoint_model_args[k] == v, "for now"
 
     gptconf = GPTConfig(**model_args)
@@ -159,31 +163,21 @@ elif init_from.startswith('gpt2'):
     print(f"Initializing from OpenAI GPT-2 weights: {init_from}")
     # initialize from OpenAI GPT-2 weights
     model = GPT.from_pretrained(init_from)
+
+
 # crop down the model block size if desired
+#block_size = 1024
+
 if block_size < model.block_size:
+    print('cropping model block size from', model.block_size, 'to', block_size)
     model.crop_block_size(block_size)
 model.to(device)
 
-# compile the model
-if compile_model:
-    print("compiling the model... (takes a ~minute)")
-    #unoptimized_model = model
-    model = torch.compile(model) # requires PyTorch 2.0
-
-# optimizer
-optimizer = model.configure_optimizers(weight_decay, learning_rate, betas)
-if init_from == 'resume':
-    optimizer.load_state_dict(checkpoint['optimizer'])
-    optimizer_to(optimizer, device)
-
-# wrap model into DDP container
-if ddp:
-    model = DDP(model, device_ids=[gpu_id])
-
 @torch.no_grad()
-def estimate_loss():
+def estimate_loss(eval=True):
     out = {}
-    model.eval()
+    if eval:
+        model.eval()
     for split in ['train', 'val']:
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
@@ -194,6 +188,33 @@ def estimate_loss():
         out[split] = losses.mean()
     model.train()
     return out
+
+
+
+# compile the model
+if compile_model:
+    print("compiling the model... (takes a ~minute)")
+    #unoptimized_model = model
+    model = torch.compile(model, mode="default") # requires PyTorch 2.0
+
+    # wrap model into DDP container
+    if ddp:
+        model = DDP(model, device_ids=[gpu_id])
+
+    #for x in range(1):
+    #    print('compiling?', estimate_loss(eval=False)) # dummy forward
+else:
+    # wrap model into DDP container
+    if ddp:
+        model = DDP(model, device_ids=[gpu_id])
+
+# optimizer
+optimizer = model.configure_optimizers(weight_decay, learning_rate, betas)
+if init_from == 'resume':
+    #optimizer.load_state_dict(checkpoint['optimizer']) # skip due to optimizer change
+    optimizer_to(optimizer, device)
+
+
 
 # learning rate decay scheduler (cosine with warmup)
 def get_lr(iter):
@@ -209,15 +230,19 @@ def get_lr(iter):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
 
+run_config = {
+    "batch_size": batch_size,
+    "block_size": block_size,
+    "learning_rate": learning_rate,
+    "grad_acc_steps": grad_acc_steps,
+    "tokens_per_step": batch_size*block_size*grad_acc_steps,
+    "optimizer": optimizer.__class__.__name__,
+}
+print('run_config = ', run_config)
 # logging
 if wandb_log and gpu_id == 0:
     wandb.init(project=wandb_project, entity=wandb_entity, name=wandb_run_name)
-    wandb.config = {
-        "batch_size": batch_size,
-        "block_size": block_size,
-        "learning_rate": learning_rate, # TODO log everything else too
-        "grad_acc_steps": grad_acc_steps,
-    }
+    wandb.config = run_config
 
 # training loop
 t0 = time.time()
@@ -273,6 +298,12 @@ while True:
     if iter_num % log_interval == 0 and gpu_id == 0:
         lossf = loss.item() # loss as float. TODO CPU-GPU sync: profile, make sure not slow af
         print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms")
+        if wandb_log:
+            wandb.log({
+                "iter": iter_num,
+                "train/loss": lossf,
+                "lr": lr,
+            }, step=iter_num)
     iter_num += 1
 
     # termination conditions
