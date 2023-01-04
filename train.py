@@ -44,6 +44,7 @@ dataset = 'uk2e10'
 batch_size = 2
 block_size = 2048
 grad_acc_steps = 128
+seed_base = 3407
 # model
 device = 'cuda:0'
 init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
@@ -107,7 +108,7 @@ else:
 
 if gpu_id == 0:
     os.makedirs(out_dir, exist_ok=True)
-torch.manual_seed(1337 + gpu_id) # note: each worker gets a different seed
+torch.manual_seed(seed_base + gpu_id) # note: each worker gets a different seed
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 torch.set_float32_matmul_precision('high')
