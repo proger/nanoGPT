@@ -26,6 +26,7 @@ from utils import optimizer_to
 
 #torch.set_default_dtype(torch.bfloat16)
 
+old_locals = locals()
 # -----------------------------------------------------------------------------
 # default config values
 # I/O
@@ -69,34 +70,36 @@ compile_model = True # use PyTorch 2.0 to compile the model to be faster
 # poor man's Configurator. Potentially a bad idea. Example usage:
 # $ python train.py override_file --batch_size=32
 # this will first run config/override_file.py, then override batch_size to 32
-for arg in sys.argv[1:]:
-    if '=' not in arg:
-        # assume it's the name of a config file
-        assert not arg.startswith('--')
-        config_file = os.path.join('config', arg + '.py')
-        print(f"Overriding config with {config_file}:")
-        with open(config_file) as f:
-            print(f.read())
-        exec(open(config_file).read())
-    else:
-        # assume it's a --key=value argument
-        assert arg.startswith('--')
-        key, val = arg.split('=')
-        key = key[2:]
-        if key in globals():
-            try:
-                # attempt to eval it it (e.g. if bool, number, or etc)
-                attempt = literal_eval(val)
-            except (SyntaxError, ValueError):
-                # if that goes wrong, just use the string
-                attempt = val
-            # ensure the types match ok
-            assert type(attempt) == type(globals()[key])
-            # cross fingers
-            print(f"Overriding: {key} = {attempt}")
-            globals()[key] = attempt
+def configure():
+    for arg in sys.argv[1:]:
+        if '=' not in arg:
+            # assume it's the name of a config file
+            assert not arg.startswith('--')
+            config_file = os.path.join('config', arg + '.py')
+            print(f"Overriding config with {config_file}:")
+            with open(config_file) as f:
+                print(f.read())
+            exec(open(config_file).read())
         else:
-            raise ValueError(f"Unknown config key: {key}")
+            # assume it's a --key=value argument
+            assert arg.startswith('--')
+            key, val = arg.split('=')
+            key = key[2:]
+            if key in globals():
+                try:
+                    # attempt to eval it it (e.g. if bool, number, or etc)
+                    attempt = literal_eval(val)
+                except (SyntaxError, ValueError):
+                    # if that goes wrong, just use the string
+                    attempt = val
+                # ensure the types match ok
+                assert type(attempt) == type(globals()[key])
+                # cross fingers
+                print(f"Overriding: {key} = {attempt}")
+                globals()[key] = attempt
+            else:
+                raise ValueError(f"Unknown config key: {key}")
+configure()
 # -----------------------------------------------------------------------------
 ddp = int(os.environ.get('LOCAL_RANK', -1)) != -1 # is this a ddp run?
 if ddp:
@@ -105,6 +108,8 @@ if ddp:
     device = f"cuda:{gpu_id}"
 else:
     gpu_id = 0 # gpu_id 0 means this is the (single) master process, basically
+
+run_config = {k: locals()[k] for k in locals() if k not in old_locals and k != 'configure'}
 
 if gpu_id == 0:
     os.makedirs(out_dir, exist_ok=True)
@@ -231,19 +236,13 @@ def get_lr(iter):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
 
-run_config = {
-    "batch_size": batch_size,
-    "block_size": block_size,
-    "learning_rate": learning_rate,
-    "grad_acc_steps": grad_acc_steps,
+run_config.update({
     "tokens_per_step": batch_size*block_size*grad_acc_steps,
-    "optimizer": optimizer.__class__.__name__,
-}
+})
 print('run_config = ', run_config)
 # logging
 if wandb_log and gpu_id == 0:
-    wandb.init(project=wandb_project, entity=wandb_entity, name=wandb_run_name)
-    wandb.config = run_config
+    wandb.init(project=wandb_project, entity=wandb_entity, name=wandb_run_name, config=run_config)
 
 # training loop
 t0 = time.time()
