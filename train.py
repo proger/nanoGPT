@@ -179,6 +179,10 @@ elif init_from.startswith('gpt2'):
 if block_size < model.block_size:
     print('cropping model block size from', model.block_size, 'to', block_size)
     model.crop_block_size(crop_block_size)
+
+torch.cuda.set_device(gpu_id)
+torch.cuda.empty_cache()
+
 model.to(device)
 
 @torch.no_grad()
