@@ -108,6 +108,7 @@ ddp = int(os.environ.get('LOCAL_RANK', -1)) != -1 # is this a ddp run?
 if ddp:
     init_process_group(backend=backend)
     gpu_id = int(os.environ["LOCAL_RANK"])
+    print("have ddp, gpu", gpu_id)
     device = f"cuda:{gpu_id}"
 else:
     gpu_id = 0 # gpu_id 0 means this is the (single) master process, basically
@@ -207,15 +208,19 @@ if compile_model:
     #for x in range(1):
     #    print('compiling?', estimate_loss(eval=False)) # dummy forward
 
-# optimizer
-optimizer = model.configure_optimizers(weight_decay, learning_rate, betas)
-if init_from == 'resume':
-    optimizer.load_state_dict(checkpoint['optimizer'])
-    optimizer_to(optimizer, device)
-
 # wrap model into DDP container
 if ddp:
     model = DDP(model, device_ids=[gpu_id])
+
+# optimizer
+if ddp:
+    optimizer = model.module.configure_optimizers(weight_decay, learning_rate, betas)
+else:
+    optimizer = model.configure_optimizers(weight_decay, learning_rate, betas)
+
+if init_from == 'resume':
+    optimizer.load_state_dict(checkpoint['optimizer'])
+    optimizer_to(optimizer, device)
 
 
 # learning rate decay scheduler (cosine with warmup)
