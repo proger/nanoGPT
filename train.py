@@ -20,6 +20,7 @@ import numpy as np
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
+import bitsandbytes as bnb
 
 from model import GPTConfig, GPT
 from utils import optimizer_to
@@ -30,7 +31,7 @@ old_locals = set(locals())
 # -----------------------------------------------------------------------------
 # default config values
 # I/O
-out_dir = 'exp/gpt2-small'
+out_dir = 'exp/gpt2-medium'
 eval_interval = 5000
 log_interval = 100
 eval_iters = 50
@@ -39,30 +40,31 @@ eval_only = False # if True, script exits right after the first eval
 wandb_log = True # disabled by default
 wandb_entity = 'stud76'
 wandb_project = 'ubertext'
-wandb_run_name = 'gpt2-small' # 'run' + str(time.time())
+wandb_run_name = 'gpt2-medium' # 'run' + str(time.time())
 # data
-dataset = 'uk2e10'
+dataset = 'uk4b'
+# aim for 0.5M tokens per gradient update
 batch_size = 4
-block_size = 2048
+block_size = 1024
 crop_block_size = 1024
-grad_acc_steps = 64
-seed_base = 3409
+grad_acc_steps = 128
+seed_base = 0
 # model
 device = 'cuda:0'
-init_from = 'resume' # 'scratch' or 'resume' or 'gpt2*'
+init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
-n_layer = 12
-n_head = 12
-n_embd = 768
+n_layer = 24
+n_head = 16
+n_embd = 1024
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
-max_iters = 1<<21 # total number of training iterations
+max_iters = 1<<20 # total number of training iterations
 weight_decay = 1e-2
 betas = (0.9, 0.95)
 # learning rate decay settings
 decay_lr = False # whether to decay the learning rate
 warmup_iters = 2000*grad_acc_steps # how many steps to warm up for
-lr_decay_iters = 320000 # how many steps to decay the learning rate for
+lr_decay_iters = max_iters - warmup_iters # how many steps to decay the learning rate for
 min_lr = 6e-5 # minimum learning rate
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.

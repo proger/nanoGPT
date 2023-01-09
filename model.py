@@ -13,6 +13,7 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+import bitsandbytes as bnb
 
 def fused_gelu(x):
     """
@@ -107,8 +108,8 @@ class GPT(nn.Module):
         self.block_size = config.block_size
 
         self.transformer = nn.ModuleDict(dict(
-            wte = nn.Embedding(config.vocab_size, config.n_embd),
-            wpe = nn.Embedding(config.block_size, config.n_embd),
+            wte = bnb.nn.StableEmbedding(config.vocab_size, config.n_embd),
+            wpe = bnb.nn.StableEmbedding(config.block_size, config.n_embd),
             drop = nn.Dropout(config.dropout),
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
             ln_f = nn.LayerNorm(config.n_embd),
@@ -235,7 +236,7 @@ class GPT(nn.Module):
             {"params": [param_dict[pn] for pn in sorted(list(decay))], "weight_decay": weight_decay},
             {"params": [param_dict[pn] for pn in sorted(list(no_decay))], "weight_decay": 0.0},
         ]
-        optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas)
+        optimizer = bnb.optim.AdamW8bit(optim_groups, lr=learning_rate, betas=betas)
         return optimizer
 
     @torch.no_grad()
