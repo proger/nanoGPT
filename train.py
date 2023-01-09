@@ -204,16 +204,8 @@ if compile_model:
     #unoptimized_model = model
     model = torch.compile(model, mode="default") # requires PyTorch 2.0
 
-    # wrap model into DDP container
-    if ddp:
-        model = DDP(model, device_ids=[gpu_id])
-
     #for x in range(1):
     #    print('compiling?', estimate_loss(eval=False)) # dummy forward
-else:
-    # wrap model into DDP container
-    if ddp:
-        model = DDP(model, device_ids=[gpu_id])
 
 # optimizer
 optimizer = model.configure_optimizers(weight_decay, learning_rate, betas)
@@ -221,6 +213,9 @@ if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
     optimizer_to(optimizer, device)
 
+# wrap model into DDP container
+if ddp:
+    model = DDP(model, device_ids=[gpu_id])
 
 
 # learning rate decay scheduler (cosine with warmup)
