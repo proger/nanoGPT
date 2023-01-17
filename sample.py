@@ -8,10 +8,12 @@ import torch.nn as nn
 from model import GPTConfig, GPT
 import sentencepiece as spm
 import sys
+from termcolor import colored
 
 parser = argparse.ArgumentParser('sample')
 parser.add_argument('--device', type=str, default='cuda:0')
 parser.add_argument('--seed', type=int, default=1337)
+parser.add_argument('--steps', type=int, default=100)
 parser.add_argument('--no_eot', action='store_true')
 parser.add_argument('ckpt_path')
 parser.add_argument('prompts', nargs='+')
@@ -44,7 +46,9 @@ for prompt in args.prompts:
 
     with torch.inference_mode():
         with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):
-            y = model.generate(x, 50, temperature=0.9, top_k=100)
+            y = model.generate(x, args.steps, temperature=0.9, top_k=100)
 
-    print(sp.decode(y[0].tolist()))
-    print('---------------')
+    y = y[0].tolist()
+    prefix, gen = y[:len(start)], y[len(start):]
+    prefix, gen = sp.decode(prefix), sp.decode(gen)
+    print(prefix, colored(gen, "magenta"))
