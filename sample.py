@@ -14,6 +14,7 @@ parser = argparse.ArgumentParser('sample')
 parser.add_argument('--device', type=str, default='cuda:0')
 parser.add_argument('--seed', type=int, default=1337)
 parser.add_argument('--steps', type=int, default=100)
+parser.add_argument('--spm', type=str, required=True)
 parser.add_argument('--no_eot', action='store_true')
 parser.add_argument('ckpt_path')
 parser.add_argument('prompts', nargs='+')
@@ -35,7 +36,7 @@ model.to(device)
 model = model._orig_mod
 model = torch.compile(model) # requires PyTorch 2.0
 
-sp = spm.SentencePieceProcessor(model_file='data/uk8/uk8_gpt.model')
+sp = spm.SentencePieceProcessor(model_file=args.spm)
 
 for prompt in args.prompts:
     if args.no_eot:
@@ -46,7 +47,7 @@ for prompt in args.prompts:
 
     with torch.inference_mode():
         with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):
-            y = model.generate(x, args.steps, temperature=0.9, top_k=100)
+            y = model.generate(x, args.steps, temperature=0.8, top_k=100)
 
     y = y[0].tolist()
     prefix, gen = y[:len(start)], y[len(start):]

@@ -123,7 +123,7 @@ class GPT(nn.Module):
 
         # report number of parameters
         n_params = sum(p.numel() for p in self.parameters())
-        print("number of parameters: %.2fM" % (n_params/1e6,))
+        #print("number of parameters: %.2fM" % (n_params/1e6,))
 
     def forward(self, idx, targets=None):
         device = idx.device

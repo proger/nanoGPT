@@ -31,7 +31,7 @@ old_locals = set(locals())
 # -----------------------------------------------------------------------------
 # default config values
 # I/O
-out_dir = 'exp/gpt2-medium'
+out_dir = 'exp/'
 eval_interval = 5000
 log_interval = 100
 eval_iters = 50
@@ -40,7 +40,7 @@ eval_only = False # if True, script exits right after the first eval
 wandb_log = True # disabled by default
 wandb_entity = 'stud76'
 wandb_project = 'ubertext'
-wandb_run_name = 'gpt2-medium' # 'run' + str(time.time())
+wandb_run_name = 'gpt2-large' # 'run' + str(time.time())
 # data
 dataset = 'uk4b'
 # aim for 0.5M tokens per gradient update
