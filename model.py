@@ -252,7 +252,8 @@ class GPT(nn.Module):
             {"params": [param_dict[pn] for pn in sorted(list(decay))], "weight_decay": weight_decay},
             {"params": [param_dict[pn] for pn in sorted(list(no_decay))], "weight_decay": 0.0},
         ]
-        optimizer = bnb.optim.AdamW8bit(optim_groups, lr=learning_rate, betas=betas)
+        #optimizer = bnb.optim.AdamW8bit(optim_groups, lr=learning_rate, betas=betas)
+        optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas)
         return optimizer
 
     @torch.no_grad()
