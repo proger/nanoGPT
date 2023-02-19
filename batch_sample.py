@@ -52,7 +52,7 @@ for article in tqdm(map(json.loads, args.prompts)):
 
         with torch.inference_mode():
             with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):
-                y = model.generate(x, args.steps, temperature=0.8, top_k=100)
+                y = model.generate(x, args.steps, temperature=0.8, top_k=100, stop_token=None)
 
         y = y[0].tolist()
         prefix, gen = y[: len(start)], y[len(start) :]
@@ -60,6 +60,7 @@ for article in tqdm(map(json.loads, args.prompts)):
 
         gen, _ = gen.split("\n", 1)
         # print(prefix, colored(gen, "magenta"))
+        print(colored(gen, "magenta"))
 
         if prompt_type == "мітки":
             article["generated_tags"] = list(map(str.strip, gen.split(",")))
