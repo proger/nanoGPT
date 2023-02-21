@@ -52,7 +52,8 @@ for article in tqdm(map(json.loads, args.prompts)):
 
         with torch.inference_mode():
             with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):
-                y = model.generate(x, args.steps, temperature=0.8, top_k=100)
+                #y = model.generate(x, args.steps, temperature=0.8, top_k=100)
+                y = model.generate(x, args.steps, temperature=1, top_k=1)
 
         y = y[0].tolist()
         prefix, gen = y[: len(start)], y[len(start) :]
